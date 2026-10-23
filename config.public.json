@@ -1,4 +1,4 @@
 {
-    "SUPABASE_URL": "https://YOUR_PROJECT_REF.supabase.co",
-    "SUPABASE_ANON_KEY": "YOUR_SUPABASE_ANON_KEY_HERE"
+    "SUPABASE_URL": "https://rsdkaaegcvltcanubnmj.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzZGthYWVnY3ZsdGNhbnVibm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3MTY3ODcsImV4cCI6MjEwODI5Mjc4N30.85Wwcf6WzQXzjqkzaMZEkMlcNBPDetVZ2e9TUO21tgs"
 }
