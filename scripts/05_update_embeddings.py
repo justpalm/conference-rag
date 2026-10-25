@@ -109,7 +109,7 @@ def main():
 
     embedded_result = client.table('sentence_embeddings') \
         .select('id', count='exact') \
-        .not_('embedding', 'is', 'null') \
+        .not_.is_('embedding', 'null') \
         .limit(1).execute()
     with_emb = embedded_result.count or 0
 
