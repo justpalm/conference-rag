@@ -426,14 +426,38 @@ function sourceDescription(record) {
 
 function passageDisplayText(record) {
     const text = record.text || '';
+    const metadata = record.source_metadata;
+    if (record.source_type === 'scripture') {
+        const prefix = metadata?.document_title;
+        if (prefix && text.startsWith(prefix + '\n')) return text.slice(prefix.length + 1).trim();
+        // Supplemental scripture pages also carry a collection and section prefix.
+        const lines = text.split('\n');
+        const collections = ['Old Testament', 'New Testament', 'Book of Mormon', 'Doctrine and Covenants', 'Pearl of Great Price'];
+        const headings = [lines[0], prefix, ...(metadata?.headings || [])];
+        return prefix && collections.includes(lines[0]) && headings.every((line, index) => lines[index] === line)
+            ? lines.slice(headings.length).join('\n').trim() : text;
+    }
     if (record.source_type !== 'pmg') return text;
     // Embeddings and RAG retain the heading context; result bodies show the passage only.
     const lines = text.split('\n');
-    const metadata = record.source_metadata;
     if (!metadata?.document_title || !lines[0].startsWith('Preach My Gospel')) return text;
     const prefix = [lines[0], metadata.document_title, ...(metadata.headings || [])];
     if (!prefix.every((line, index) => lines[index] === line)) return text;
     return lines.slice(prefix.length).join('\n').trim();
+}
+
+function passageDisplayHtml(record, keyword) {
+    const text = passageDisplayText(record);
+    const format = value => keyword ? highlightKeyword(value, keyword) : escapeHtml(value);
+    if (record.source_type === 'scripture' && record.source_metadata?.verse_start != null) {
+        return text.split(/\r?\n/).filter(line => line.trim())
+            .map(verse => `<p class="scripture-verse">${format(verse)}</p>`).join('');
+    }
+    if (record.source_type === 'pmg') {
+        return text.split(/\r?\n\s*\r?\n/).filter(paragraph => paragraph.trim())
+            .map(paragraph => `<p class="passage-paragraph">${format(paragraph)}</p>`).join('');
+    }
+    return format(text);
 }
 
 for (const input of sourceCheckboxes) {
@@ -486,7 +510,7 @@ async function keywordSearch() {
                     sentences: []
                 };
             }
-            talks[talkId].sentences.push(highlightKeyword(passageDisplayText(row), query));
+            talks[talkId].sentences.push(passageDisplayHtml(row, query));
         }
 
         let html = '';
@@ -553,7 +577,7 @@ async function semanticSearch() {
                     </div>
                     ${badge}
                 </div>
-                <div class="result-sentences">${escapeHtml(passageDisplayText(result))}</div>
+                <div class="result-sentences">${passageDisplayHtml(result)}</div>
             </div>`;
         }
         showResults('semantic', html);

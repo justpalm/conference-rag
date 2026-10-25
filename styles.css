@@ -643,6 +643,11 @@ input:focus {
     line-height: 1.6;
 }
 
+.scripture-verse + .scripture-verse,
+.passage-paragraph + .passage-paragraph {
+    margin-top: 1rem;
+}
+
 .result-sentences mark {
     background: rgba(62, 207, 142, 0.3);
     color: var(--text);
