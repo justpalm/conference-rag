@@ -424,6 +424,18 @@ function sourceDescription(record) {
     return detail ? `${label} · ${detail}` : label;
 }
 
+function passageDisplayText(record) {
+    const text = record.text || '';
+    if (record.source_type !== 'pmg') return text;
+    // Embeddings and RAG retain the heading context; result bodies show the passage only.
+    const lines = text.split('\n');
+    const metadata = record.source_metadata;
+    if (!metadata?.document_title || !lines[0].startsWith('Preach My Gospel')) return text;
+    const prefix = [lines[0], metadata.document_title, ...(metadata.headings || [])];
+    if (!prefix.every((line, index) => lines[index] === line)) return text;
+    return lines.slice(prefix.length).join('\n').trim();
+}
+
 for (const input of sourceCheckboxes) {
     input.addEventListener('change', () => {
         sourceSelectionVersion++;
@@ -474,7 +486,7 @@ async function keywordSearch() {
                     sentences: []
                 };
             }
-            talks[talkId].sentences.push(highlightKeyword(row.text, query));
+            talks[talkId].sentences.push(highlightKeyword(passageDisplayText(row), query));
         }
 
         let html = '';
@@ -541,7 +553,7 @@ async function semanticSearch() {
                     </div>
                     ${badge}
                 </div>
-                <div class="result-sentences">${escapeHtml(result.text)}</div>
+                <div class="result-sentences">${escapeHtml(passageDisplayText(result))}</div>
             </div>`;
         }
         showResults('semantic', html);
