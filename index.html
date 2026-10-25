@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase RAG - Conference Q&A</title>
+    <title>Gospel Library Q&A</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -59,8 +59,8 @@
     <div id="login-screen" class="screen">
         <div class="container">
             <div class="card">
-                <h1>Conference Q&A</h1>
-                <p class="subtitle">Ask questions about conference talks using AI</p>
+                <h1>Gospel Library Q&A</h1>
+                <p class="subtitle">Explore conference talks, scriptures, and Preach My Gospel</p>
 
                 <div id="login-form">
                     <input type="email" id="email-input" placeholder="Enter your email" />
@@ -76,7 +76,7 @@
     <!-- Main App Screen -->
     <div id="app-screen" class="screen hidden">
         <nav class="navbar">
-            <h2>Conference Q&A</h2>
+            <h2>Gospel Library Q&A</h2>
             <div class="user-info">
                 <span id="user-email"></span>
                 <button id="logout-btn" class="btn-secondary">Logout</button>
@@ -84,6 +84,16 @@
         </nav>
 
         <div class="container">
+            <fieldset class="source-filters" aria-describedby="source-filter-help">
+                <legend>Search in</legend>
+                <div class="source-options">
+                    <label><input type="checkbox" name="source-type" value="conference" checked> Conference talks</label>
+                    <label><input type="checkbox" name="source-type" value="scripture" checked> Scriptures</label>
+                    <label><input type="checkbox" name="source-type" value="pmg" checked> Preach My Gospel</label>
+                </div>
+                <p id="source-filter-help">Choose one or more collections. Applies to all three search modes.</p>
+                <p id="source-filter-message" role="status" aria-live="polite"></p>
+            </fieldset>
             <div class="search-panels">
                 <!-- Panel 1: Keyword Search -->
                 <div class="search-panel" id="keyword-panel">
@@ -91,8 +101,7 @@
                         <h3>🔍 Keyword Search</h3>
                         <span class="status-badge not-ready" id="keyword-status">🔴 Not Ready</span>
                     </div>
-                    <p class="panel-description">Search conference talks by keyword. Works once you import the
-                        conference data.</p>
+                    <p class="panel-description">Find exact words in your selected collections.</p>
                     <div class="panel-input">
                         <input type="text" id="keyword-input" placeholder="Search by keyword..." autocomplete="off"
                             disabled />
@@ -123,10 +132,9 @@
                         <h3>🤖 Ask a Question (RAG)</h3>
                         <span class="status-badge not-ready" id="rag-status">🔴 Not Ready</span>
                     </div>
-                    <p class="panel-description">Get AI-generated answers based on conference talks. Requires all Edge
-                        Functions deployed.</p>
+                    <p class="panel-description">Get an AI-generated answer with citations from your selected collections.</p>
                     <div class="panel-input">
-                        <input type="text" id="rag-input" placeholder="Ask a question about conference talks..."
+                        <input type="text" id="rag-input" placeholder="Ask a gospel question..."
                             autocomplete="off" disabled />
                         <button id="rag-btn" class="btn-primary" disabled>Ask</button>
                     </div>

@@ -407,21 +407,52 @@ function setSearchReady(type, ready) {
 // KEYWORD SEARCH
 // ============================================
 
+const sourceCheckboxes = [...document.querySelectorAll('input[name="source-type"]')];
+let sourceSelectionVersion = 0;
+const sourceLabels = { conference: 'Conference talks', scripture: 'Scriptures', pmg: 'Preach My Gospel' };
+
+function selectedSources() {
+    const sources = sourceCheckboxes.filter(input => input.checked).map(input => input.value);
+    if (!sources.length) throw new Error('Choose at least one collection to search.');
+    return sources;
+}
+
+function sourceDescription(record) {
+    const type = record.source_type || 'conference';
+    const label = sourceLabels[type] || type;
+    const detail = type === 'conference' ? record.speaker : record.source_metadata?.headings?.join(' › ');
+    return detail ? `${label} · ${detail}` : label;
+}
+
+for (const input of sourceCheckboxes) {
+    input.addEventListener('change', () => {
+        sourceSelectionVersion++;
+        for (const mode of ['keyword', 'semantic', 'rag']) showResults(mode, '');
+        const message = document.getElementById('source-filter-message');
+        if (message) message.textContent = sourceCheckboxes.some(input => input.checked)
+            ? '' : 'Choose at least one collection to search.';
+    });
+}
+
 async function keywordSearch() {
     const query = keywordInput ? keywordInput.value.trim() : '';
     if (!query || !supabaseClient) return;
 
     showLoading(true);
     clearResults('keyword');
+    const version = sourceSelectionVersion;
 
     try {
+        const sources = selectedSources();
         // Search sentence_embeddings that contain the keyword (case-insensitive)
         const { data, error } = await supabaseClient
             .from('sentence_embeddings')
-            .select('text, talk_id, title, speaker, url')
+            .select('id, text, talk_id, title, speaker, url, source_type, source_metadata')
+            .in('source_type', sources)
             .ilike('text', `%${query}%`)
             .limit(20);
 
+        if (version !== sourceSelectionVersion) return;
         if (error) throw new Error(`Search failed: ${error.message}`);
 
         if (!data || data.length === 0) {
@@ -432,12 +463,14 @@ async function keywordSearch() {
         // Group by talk
         const talks = {};
         for (const row of data) {
-            const talkId = row.talk_id;
+            const talkId = row.source_type === 'conference' ? row.talk_id : row.id;
             if (!talks[talkId]) {
                 talks[talkId] = {
                     title: row.title || 'Unknown Talk',
                     speaker: row.speaker || 'Unknown Speaker',
                     url: row.url || '',
+                    source_type: row.source_type,
+                    source_metadata: row.source_metadata,
                     sentences: []
                 };
             }
@@ -448,13 +481,14 @@ async function keywordSearch() {
         for (const talk of Object.values(talks)) {
             html += `<div class="result-card">
                 <div class="result-title"><a href="${escapeHtml(talk.url)}" target="_blank" class="result-title-link">${escapeHtml(talk.title)}</a></div>
-                <div class="result-speaker">by ${escapeHtml(talk.speaker)}</div>
+                <div class="result-speaker">${escapeHtml(sourceDescription(talk))}</div>
                 <div class="result-sentences">${talk.sentences.slice(0, 3).join('<br>')}</div>
             </div>`;
         }
         showResults('keyword', html);
 
     } catch (error) {
+        if (version !== sourceSelectionVersion) return;
         showResults('keyword', `<div class="result-error">Error: ${escapeHtml(error.message)}</div>`);
     } finally {
         showLoading(false);
@@ -477,13 +511,17 @@ async function semanticSearch() {
 
     showLoading(true);
     clearResults('semantic');
+    const version = sourceSelectionVersion;
 
     try {
+        const sources = selectedSources();
         // Step 1: Get embedding
         const embedding = await getEmbedding(query);
 
         // Step 2: Search for similar sentences
-        const results = await searchSentences(embedding);
+        if (version !== sourceSelectionVersion) return;
+        const results = await searchSentences(embedding, sources);
+        if (version !== sourceSelectionVersion) return;
 
         if (!results || results.length === 0) {
             showResults('semantic', '<div class="no-results">No similar content found. Try a different query.</div>');
@@ -499,7 +537,7 @@ async function semanticSearch() {
                 <div class="result-card-header">
                     <div>
                         <div class="result-title"><a href="${escapeHtml(result.url)}" target="_blank" class="result-title-link">${escapeHtml(result.title)}</a></div>
-                        <div class="result-speaker">by ${escapeHtml(result.speaker)}</div>
+                        <div class="result-speaker">${escapeHtml(sourceDescription(result))}</div>
                     </div>
                     ${badge}
                 </div>
@@ -509,6 +547,7 @@ async function semanticSearch() {
         showResults('semantic', html);
 
     } catch (error) {
+        if (version !== sourceSelectionVersion) return;
         showResults('semantic', `<div class="result-error">Error: ${escapeHtml(error.message)}</div>`);
     } finally {
         showLoading(false);
@@ -525,22 +564,32 @@ async function askQuestion() {
 
     showLoading(true);
     clearResults('rag');
+    const version = sourceSelectionVersion;
 
     try {
+        const sources = selectedSources();
         // Step 1: Get embedding
         const embedding = await getEmbedding(question);
 
         // Step 2: Search for similar sentences
-        const results = await searchSentences(embedding);
+        if (version !== sourceSelectionVersion) return;
+        const results = await searchSentences(embedding, sources);
+        if (version !== sourceSelectionVersion) return;
+        if (!results?.length) {
+            showResults('rag', '<div class="no-results">No matching passages in the selected collections.</div>');
+            return;
+        }
 
         // Step 3: Group by talk (with similarity scores and URLs)
         const topTalks = groupByTalk(results);
 
         // Step 4: Fetch full talk text for richer context
         const enrichedTalks = await fetchFullTalkText(topTalks);
+        if (version !== sourceSelectionVersion) return;
 
         // Step 5: Generate answer with full context
         const answer = await generateAnswer(question, enrichedTalks);
+        if (version !== sourceSelectionVersion) return;
 
         // Compute overall similarity (weighted avg across source talks)
         const overallSimilarity = topTalks.reduce((sum, t) => sum + t.avgSimilarity, 0) / topTalks.length;
@@ -564,7 +613,7 @@ async function askQuestion() {
                 <div class="result-card-header">
                     <div>
                         <div class="result-title"><a href="${escapeHtml(talk.url)}" target="_blank" class="result-title-link">${escapeHtml(talk.title)}</a></div>
-                        <div class="result-speaker">by ${escapeHtml(talk.speaker)}</div>
+                        <div class="result-speaker">${escapeHtml(sourceDescription(talk))}</div>
                     </div>
                     ${talkBadge}
                 </div>
@@ -573,6 +622,7 @@ async function askQuestion() {
         showResults('rag', html);
 
     } catch (error) {
+        if (version !== sourceSelectionVersion) return;
         showResults('rag', `<div class="result-error">Error: ${escapeHtml(error.message)}</div>`);
     } finally {
         showLoading(false);
@@ -597,11 +647,12 @@ async function getEmbedding(text) {
 }
 
 // Search sentences using vector similarity
-async function searchSentences(embedding) {
+async function searchSentences(embedding, sources = selectedSources()) {
     if (!supabaseClient) throw new Error('Supabase not configured');
 
-    const { data, error } = await supabaseClient.rpc('match_sentences', {
+    const { data, error } = await supabaseClient.rpc('match_library_sentences', {
         query_embedding: embedding,
+        source_types: sources,
         match_count: 20
     });
 
@@ -614,18 +665,22 @@ function groupByTalk(sentences) {
     const talkMap = {};
 
     for (const sent of sentences) {
-        if (!talkMap[sent.talk_id]) {
-            talkMap[sent.talk_id] = {
+        // Keep scripture references and PMG sections distinct; only group conference sentences.
+        const key = sent.source_type === 'conference' || !sent.source_type ? sent.talk_id : sent.id;
+        if (!talkMap[key]) {
+            talkMap[key] = {
                 talk_id: sent.talk_id,
                 title: sent.title,
                 speaker: sent.speaker,
                 url: sent.url,
+                source_type: sent.source_type || 'conference',
+                source_metadata: sent.source_metadata || {},
                 sentences: [],
                 totalSimilarity: 0
             };
         }
-        talkMap[sent.talk_id].sentences.push(sent.text);
-        talkMap[sent.talk_id].totalSimilarity += sent.similarity;
+        talkMap[key].sentences.push(sent.text);
+        talkMap[key].totalSimilarity += sent.similarity;
     }
 
     return Object.values(talkMap)
@@ -636,6 +691,8 @@ function groupByTalk(sentences) {
             title: talk.title,
             speaker: talk.speaker,
             url: talk.url,
+            source_type: talk.source_type,
+            source_metadata: talk.source_metadata,
             text: talk.sentences.join(' '),
             // TODO: Is average similarity the right metric? Alternatives worth researching:
             // - Max similarity (best single match per talk)
@@ -650,11 +707,14 @@ function groupByTalk(sentences) {
 async function fetchFullTalkText(talks) {
     if (!supabaseClient || !talks.length) return talks;
 
-    const talkIds = talks.map(t => t.talk_id);
+    // Library chunks already contain a bounded passage and its heading/reference.
+    const talkIds = talks.filter(t => t.source_type === 'conference' || !t.source_type).map(t => t.talk_id);
+    if (!talkIds.length) return talks;
 
     const { data, error } = await supabaseClient
         .from('sentence_embeddings')
         .select('talk_id, sentence_num, text')
+        .eq('source_type', 'conference')
         .in('talk_id', talkIds)
         .order('talk_id')
         .order('sentence_num');
@@ -674,7 +734,7 @@ async function fetchFullTalkText(talks) {
     // Replace snippet text with full talk text
     return talks.map(talk => ({
         ...talk,
-        text: fullTextMap[talk.talk_id]
+        text: (talk.source_type === 'conference' || !talk.source_type) && fullTextMap[talk.talk_id]
             ? fullTextMap[talk.talk_id].join(' ')
             : talk.text
     }));
